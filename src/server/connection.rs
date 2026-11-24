@@ -2047,7 +2047,8 @@ impl Connection {
                 json!(crate::platform::is_installed()),
             );
             self.supports_native_touch = self.is_remote()
-                && self.lr.my_platform == hbb_common::whoami::Platform::Windows.to_string()
+                && (self.lr.my_platform == hbb_common::whoami::Platform::Windows.to_string()
+                    || self.lr.my_platform == "Android")
                 && crate::platform::is_installed()
                 && crate::platform::windows::native_touch::is_supported();
             if self.supports_native_touch {

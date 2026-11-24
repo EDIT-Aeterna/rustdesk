@@ -195,6 +195,7 @@ class _RemotePageState extends State<RemotePage> with WidgetsBindingObserver {
     // down. The reconnect then re-attaches to the leaked session and is stuck on
     // "Connecting...". Dispatching it here makes teardown happen synchronously on
     // pop; the `sessionClose` in `gFFI.close()` becomes a no-op once removed.
+    inputModel.setAndroidNativeTouch(false);
     unawaited(bind.sessionClose(sessionId: sessionId));
     // https://github.com/flutter/flutter/issues/64935
     super.dispose();
@@ -227,6 +228,8 @@ class _RemotePageState extends State<RemotePage> with WidgetsBindingObserver {
   void didChangeAppLifecycleState(AppLifecycleState state) {
     if (state == AppLifecycleState.resumed) {
       trySyncClipboard();
+    } else {
+      inputModel.cancelNativeTouch();
     }
   }
 
@@ -553,33 +556,46 @@ class _RemotePageState extends State<RemotePage> with WidgetsBindingObserver {
                     color: kColorCanvas,
                     child: isWebDesktop
                         ? getBodyForDesktopWithListener()
-                        : SafeArea(
-                            child:
-                                OrientationBuilder(builder: (ctx, orientation) {
-                              if (_currentOrientation != orientation) {
-                                Timer(const Duration(milliseconds: 200), () {
-                                  gFFI.dialogManager
-                                      .resetMobileActionsOverlay(ffi: gFFI);
-                                  _currentOrientation = orientation;
-                                  gFFI.canvasModel.updateViewStyle();
-                                });
-                              }
-                              return Container(
-                                color: MyTheme.canvasColor,
-                                child: inputModel.isPhysicalMouse.value
-                                    ? getBodyForMobile()
-                                    : RawTouchGestureDetectorRegion(
-                                        child: getBodyForMobile(),
-                                        ffi: gFFI,
-                                      ),
-                              );
-                            }),
-                          ),
+                        : _buildMobileCanvas(),
                   );
                 })
               ],
             )),
           )),
+    );
+  }
+
+  Widget _buildMobileCanvas() {
+    final canvas = SafeArea(
+      child: OrientationBuilder(builder: (context, orientation) {
+        if (_currentOrientation != orientation) {
+          inputModel.cancelNativeTouch();
+          Timer(const Duration(milliseconds: 200), () {
+            if (!mounted) return;
+            gFFI.dialogManager.resetMobileActionsOverlay(ffi: gFFI);
+            _currentOrientation = orientation;
+            gFFI.canvasModel.updateViewStyle();
+          });
+        }
+        return Obx(() {
+          final nativeTouch = inputModel.androidNativeTouchEnabled;
+          final physicalMouse = inputModel.isPhysicalMouse.value;
+          final body = getBodyForMobile(nativeTouch: nativeTouch);
+          return nativeTouch || physicalMouse
+              ? body
+              : RawTouchGestureDetectorRegion(child: body, ffi: gFFI);
+        });
+      }),
+    );
+    if (!isAndroid) return canvas;
+    // Keep the listener above SafeArea so mobile coordinate mapping can
+    // subtract the insets once, as it does for mouse input.
+    return Listener(
+      onPointerDown: inputModel.handleNativeTouch,
+      onPointerMove: inputModel.handleNativeTouch,
+      onPointerUp: inputModel.handleNativeTouch,
+      onPointerCancel: inputModel.handleNativeTouch,
+      child: canvas,
     );
   }
 
@@ -706,7 +722,7 @@ class _RemotePageState extends State<RemotePage> with WidgetsBindingObserver {
       !gFFI.canvasModel.cursorEmbedded &&
       !gFFI.inputModel.relativeMouseMode.value;
 
-  Widget getBodyForMobile() {
+  Widget getBodyForMobile({required bool nativeTouch}) {
     return Container(
         color: MyTheme.canvasColor,
         child: Stack(children: () {
@@ -759,14 +775,12 @@ class _RemotePageState extends State<RemotePage> with WidgetsBindingObserver {
           if (showCursorPaint) {
             paints.add(CursorPaint(widget.id));
           }
-          if (gFFI.ffiModel.touchMode) {
-            paints.add(FloatingMouse(
-              ffi: gFFI,
-            ));
-          } else {
-            paints.add(FloatingMouseWidgets(
-              ffi: gFFI,
-            ));
+          if (!nativeTouch) {
+            if (gFFI.ffiModel.touchMode) {
+              paints.add(FloatingMouse(ffi: gFFI));
+            } else {
+              paints.add(FloatingMouseWidgets(ffi: gFFI));
+            }
           }
           return paints;
         }()));
@@ -948,16 +962,34 @@ class _RemotePageState extends State<RemotePage> with WidgetsBindingObserver {
         child: SingleChildScrollView(
             controller: ScrollController(),
             padding: EdgeInsets.symmetric(vertical: 10),
-            child: GestureHelp(
-              touchMode: gFFI.ffiModel.touchMode,
-              onTouchModeChange: (t) {
-                gFFI.ffiModel.toggleTouchMode();
-                final v = gFFI.ffiModel.touchMode ? 'Y' : 'N';
-                bind.mainSetLocalOption(key: kOptionTouchMode, value: v);
-              },
-              virtualMouseMode: gFFI.ffiModel.virtualMouseMode,
-              inputModel: gFFI.inputModel,
-            )));
+            child: Consumer<FfiModel>(builder: (context, ffiModel, _) {
+              return Obx(() {
+                final nativeTouch = inputModel.androidNativeTouchEnabled;
+                final canEnableNativeTouch =
+                    inputModel.canEnableAndroidNativeTouch;
+                return Column(
+                  children: [
+                    if (nativeTouch || canEnableNativeTouch)
+                      SwitchListTile(
+                        title: Text(translate('Send native touch')),
+                        value: nativeTouch,
+                        onChanged: inputModel.setAndroidNativeTouch,
+                      ),
+                    if (!nativeTouch)
+                      GestureHelp(
+                        touchMode: ffiModel.touchMode,
+                        onTouchModeChange: (_) {
+                          ffiModel.toggleTouchMode();
+                          final v = ffiModel.touchMode ? 'Y' : 'N';
+                          bind.mainSetLocalOption(key: kOptionTouchMode, value: v);
+                        },
+                        virtualMouseMode: ffiModel.virtualMouseMode,
+                        inputModel: inputModel,
+                      ),
+                  ],
+                );
+              });
+            })));
   }
 
   // * Currently mobile does not enable map mode

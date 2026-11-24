@@ -1828,11 +1828,32 @@ class InputModel {
     return dt >= 0 && dt < kTouchAfterMouseWindowMs;
   }
 
-  bool get supportsNativeTouch =>
-      isWindows &&
+  bool get _peerSupportsNativeTouch =>
       peerPlatform == kPeerPlatformWindows &&
       !isViewCamera &&
       parent.target?.ffiModel.pi.platformAdditions['native_touch'] == true;
+
+  final _androidNativeTouch = false.obs;
+
+  bool get androidNativeTouchEnabled => _androidNativeTouch.value;
+
+  bool get canEnableAndroidNativeTouch =>
+      isAndroid && _peerSupportsNativeTouch && keyboardPerm && !isViewOnly;
+
+  bool get supportsNativeTouch =>
+      (isWindows || (isAndroid && androidNativeTouchEnabled)) &&
+      _peerSupportsNativeTouch;
+
+  void setAndroidNativeTouch(bool enabled) {
+    if (enabled == androidNativeTouchEnabled) return;
+    if (enabled) {
+      if (!canEnableAndroidNativeTouch) return;
+      setRelativeMouseMode(false);
+    } else {
+      cancelNativeTouch();
+    }
+    _androidNativeTouch.value = enabled;
+  }
 
   static const int _maxNativeContacts = 10;
   final Set<int> _nativeContacts = {};

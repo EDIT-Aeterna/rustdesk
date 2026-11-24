@@ -24,6 +24,7 @@ pub static ref T: std::collections::HashMap<&'static str, &'static str> =
         ("Refresh random password", "刷新随机密码"),
         ("Set your own password", "设置密码"),
         ("Enable keyboard/mouse", "允许控制键盘/鼠标"),
+        ("Send native touch", "发送原生触控"),
         ("Enable clipboard", "允许同步剪贴板"),
         ("Enable file transfer", "允许传输文件"),
         ("Enable TCP tunneling", "允许建立 TCP 隧道"),

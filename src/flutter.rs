@@ -1949,7 +1949,7 @@ fn session_send_touch_event(
     }
 }
 
-#[cfg(windows)]
+#[cfg(any(windows, target_os = "android"))]
 fn session_send_native_touch(session_id: SessionID, value: &serde_json::Value) {
     use native_touch_event::Phase;
 
@@ -1996,7 +1996,7 @@ pub fn session_send_pointer(session_id: SessionID, msg: String) {
         match (m.get("k"), m.get("v")) {
             (Some(k), Some(v)) => match k.as_str() {
                 Some("touch") => session_send_touch_event(session_id, v, alt, ctrl, shift, command),
-                #[cfg(windows)]
+                #[cfg(any(windows, target_os = "android"))]
                 Some("native_touch") => session_send_native_touch(session_id, v),
                 _ => {}
             },

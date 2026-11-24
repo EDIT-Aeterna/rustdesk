@@ -619,28 +619,37 @@ class RawPointerMouseRegion extends StatelessWidget {
     required this.child,
   });
 
+  bool _handleNativeTouch(PointerEvent event) {
+    // Android forwards touches from the remote canvas, below this listener.
+    if (isAndroid) {
+      return inputModel.androidNativeTouchEnabled &&
+          event.kind == PointerDeviceKind.touch;
+    }
+    return inputModel.handleNativeTouch(event);
+  }
+
   @override
   Widget build(BuildContext context) {
     return Listener(
       onPointerHover: inputModel.onPointHoverImage,
       onPointerDown: (evt) {
         onPointerDown?.call(evt);
-        if (!inputModel.handleNativeTouch(evt)) {
+        if (!_handleNativeTouch(evt)) {
           inputModel.onPointDownImage(evt);
         }
       },
       onPointerUp: (evt) {
         onPointerUp?.call(evt);
-        if (!inputModel.handleNativeTouch(evt)) {
+        if (!_handleNativeTouch(evt)) {
           inputModel.onPointUpImage(evt);
         }
       },
       onPointerMove: (evt) {
-        if (!inputModel.handleNativeTouch(evt)) {
+        if (!_handleNativeTouch(evt)) {
           inputModel.onPointMoveImage(evt);
         }
       },
-      onPointerCancel: inputModel.handleNativeTouch,
+      onPointerCancel: _handleNativeTouch,
       onPointerSignal: inputModel.onPointerSignalImage,
       onPointerPanZoomStart: inputModel.onPointerPanZoomStart,
       onPointerPanZoomUpdate: inputModel.onPointerPanZoomUpdate,

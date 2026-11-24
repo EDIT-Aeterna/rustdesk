@@ -235,6 +235,7 @@ class FfiModel with ChangeNotifier {
     final hasKeyboardPerm = _permissions['keyboard'] != false;
     if (hadKeyboardPerm && !hasKeyboardPerm) {
       final inputModel = parent.target?.inputModel;
+      inputModel?.cancelNativeTouch();
       if (inputModel != null && inputModel.relativeMouseMode.value) {
         inputModel.setRelativeMouseMode(false);
         showToast(translate('rel-mouse-permission-lost-tip'));
